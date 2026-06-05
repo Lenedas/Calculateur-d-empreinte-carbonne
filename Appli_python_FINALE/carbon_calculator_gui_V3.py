@@ -20,7 +20,7 @@ class CarbonCalculatorApp:
         self.style.theme_use("clam")
         
         # Frame principal
-        main_frame = ttk.Frame(root, padding="15")
+        main_frame = ttk.Frame(root, padding="8")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Titre
@@ -31,11 +31,27 @@ class CarbonCalculatorApp:
         )
         title.grid(row=0, column=0, columnspan=2, pady=10)
         
-        # Label et input : Poids
-        ttk.Label(main_frame, text="Poids (kg) :").grid(row=1, column=0, sticky=tk.W, pady=8)
+        # Label et input : Poids + sélection d'unité (kg / t)
+        self.unit_var = tk.StringVar(value="kg")
+        self.weight_label = ttk.Label(main_frame, text="Poids (kg) :")
+        self.weight_label.grid(row=1, column=0, sticky=tk.W, pady=8)
+
         self.weight_var = tk.StringVar()
-        weight_entry = ttk.Entry(main_frame, textvariable=self.weight_var, width=20)
-        weight_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=10)
+        weight_frame = ttk.Frame(main_frame)
+        weight_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=10)
+
+        weight_entry = ttk.Entry(weight_frame, textvariable=self.weight_var, width=13)
+        weight_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        unit_combo = ttk.Combobox(
+            weight_frame,
+            textvariable=self.unit_var,
+            values=["kg", "t"],
+            state="readonly",
+            width=3
+        )
+        unit_combo.pack(side=tk.LEFT, padx=(6, 0))
+        unit_combo.bind("<<ComboboxSelected>>", self.on_unit_changed)
         
         # Label et input : Distance
         ttk.Label(main_frame, text="Distance (km) :").grid(row=2, column=0, sticky=tk.W, pady=8)
@@ -48,7 +64,7 @@ class CarbonCalculatorApp:
         self.factor_choice_var = tk.StringVar(value="86 g")
         self.custom_factor_var = tk.StringVar()
 
-        factor_options = ["86 g", "183 g", "1099 g", "Personnalisé"]
+        factor_options = ["86 g Marchandise diverse/longue distance", "183 g frigorifique", "1099 g Express", "Personnalisé"]
         factor_combo = ttk.Combobox(
             main_frame,
             textvariable=self.factor_choice_var,
@@ -128,7 +144,12 @@ class CarbonCalculatorApp:
                 messagebox.showerror("Erreur", "Veuillez remplir le poids et la distance.")
                 return
             
-            weight_kg = float(weight_str)
+            weight_input = float(weight_str)
+            # Convertir en kg si l'utilisateur a saisi en tonnes
+            if self.unit_var.get() == 't':
+                weight_kg = weight_input * 1000.0
+            else:
+                weight_kg = weight_input
             distance_km = float(distance_str)
 
             selected_factor = self.factor_choice_var.get()
@@ -148,12 +169,23 @@ class CarbonCalculatorApp:
             # Calcul
             emissions_kg = calculate_emissions(weight_kg, distance_km, factor)
             emissions_g = emissions_kg * 1000
-            weight_t = weight_kg / 1000.0
-            
+
+            # Préparer l'affichage de la formule selon l'unité choisie
+            if self.unit_var.get() == 't':
+                # l'utilisateur a saisi en tonnes
+                weight_display = f"{weight_input:.3f} t"
+                formula = f"{factor} g/t.km × {weight_input:.3f} t × {distance_km} km = {emissions_g:.0f} g CO2e"
+            else:
+                # l'utilisateur a saisi en kg
+                weight_t = weight_kg / 1000.0
+                weight_display = f"{weight_input:.0f} kg ({weight_t:.3f} t)"
+                formula = f"{factor} g/t.km × {weight_t:.3f} t × {distance_km} km = {emissions_g:.0f} g CO2e"
+
             # Afficher le résultat
             result_text = (
                 f"Résultat : {emissions_kg:.2f} kg CO2e\n\n"
-                f"Formule : {factor} g/t.km × {weight_t:.3f} t × {distance_km} km = {emissions_g:.0f} g CO2e"
+                f"Entrée : {weight_display}\n"
+                f"Formule : {formula}"
             )
             
             self.result_text.config(state=tk.NORMAL)
@@ -177,6 +209,14 @@ class CarbonCalculatorApp:
         else:
             self.custom_factor_entry.config(state="disabled")
             self.custom_factor_var.set("")
+
+    def on_unit_changed(self, event=None):
+        """Met à jour le label du poids quand l'utilisateur change l'unité."""
+        unit = self.unit_var.get()
+        if unit == 't':
+            self.weight_label.config(text="Poids (t) :")
+        else:
+            self.weight_label.config(text="Poids (kg) :")
     
     def reset(self):
         """Réinitialise tous les champs."""
@@ -185,6 +225,8 @@ class CarbonCalculatorApp:
         self.factor_choice_var.set("86 g")
         self.custom_factor_var.set("")
         self.custom_factor_entry.config(state="disabled")
+        self.unit_var.set("kg")
+        self.weight_label.config(text="Poids (kg) :")
         self.result_text.config(state=tk.NORMAL)
         self.result_text.delete(1.0, tk.END)
         self.result_text.config(state=tk.DISABLED)
